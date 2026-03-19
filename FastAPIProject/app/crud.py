@@ -1,355 +1,459 @@
+from __future__ import annotations
+
+from statistics import median
+from typing import Optional
+
+from sqlalchemy import asc, desc, func
 from sqlalchemy.orm import Session
+
 from app import models, schemas
 
+from collections import defaultdict
 
-def create_location(db: Session, location: schemas.LocationCreate):
-    db_location = models.Location(
-        city=location.city,
-        district=location.district,
-        postcode_area=location.postcode_area,
-        region=location.region,
-        latitude=location.latitude,
-        longitude=location.longitude
+def create_property(db: Session, property_data: schemas.PropertyCreate):
+    db_property = models.PropertyRecord(**property_data.model_dump())
+    db.add(db_property)
+    db.commit()
+    db.refresh(db_property)
+    return db_property
+
+
+def get_property(db: Session, property_id: int):
+    return (
+        db.query(models.PropertyRecord)
+        .filter(models.PropertyRecord.id == property_id)
+        .first()
     )
-    db.add(db_location)
-    db.commit()
-    db.refresh(db_location)
-    return db_location
 
-
-def get_locations(db: Session):
-    return db.query(models.Location).all()
-
-
-def get_location(db: Session, location_id: int):
-    return db.query(models.Location).filter(models.Location.id == location_id).first()
-
-
-def update_location(db: Session, location_id: int, location: schemas.LocationCreate):
-    db_location = get_location(db, location_id)
-
-    if db_location is None:
-        return None
-
-    db_location.city = location.city
-    db_location.district = location.district
-    db_location.postcode_area = location.postcode_area
-    db_location.region = location.region
-    db_location.latitude = location.latitude
-    db_location.longitude = location.longitude
-
-    db.commit()
-    db.refresh(db_location)
-    return db_location
-
-
-def delete_location(db: Session, location_id: int):
-    db_location = get_location(db, location_id)
-
-    if db_location is None:
-        return None
-
-    db.delete(db_location)
-    db.commit()
-    return db_location
-
-
-def create_listing(db: Session, listing: schemas.ListingCreate):
-    db_listing = models.Listing(
-        title=listing.title,
-        description=listing.description,
-        monthly_rent=listing.monthly_rent,
-        deposit=listing.deposit,
-        bedrooms=listing.bedrooms,
-        bathrooms=listing.bathrooms,
-        property_type=listing.property_type,
-        furnished=listing.furnished,
-        bills_included=listing.bills_included,
-        available_from=listing.available_from,
-        is_active=listing.is_active,
-        location_id=listing.location_id
-    )
-    db.add(db_listing)
-    db.commit()
-    db.refresh(db_listing)
-    return db_listing
-
-
-def get_listings(
+def update_property(
     db: Session,
-    city: str = None,
-    district: str = None,
-    min_rent: float = None,
-    max_rent: float = None,
-    bedrooms: int = None,
-    property_type: str = None,
-    is_active: bool = None,
-    sort_by: str = None,
-    order: str = "asc"
+    property_id: int,
+    property_data: schemas.PropertyUpdate,
 ):
-    query = db.query(models.Listing).join(models.Location)
+    db_property = get_property(db, property_id)
+    if db_property is None:
+        return None
 
-    if city:
-        query = query.filter(models.Location.city.ilike(f"%{city}%"))
+    update_data = property_data.model_dump(exclude_unset=True)
 
+    for field, value in update_data.items():
+        setattr(db_property, field, value)
+
+    db.commit()
+    db.refresh(db_property)
+    return db_property
+
+
+def get_properties(
+    db: Session,
+    postcode: str = None,
+    town_city: str = None,
+    district: str = None,
+    county: str = None,
+    property_type: str = None,
+    min_price: float = None,
+    max_price: float = None,
+    date_from=None,
+    date_to=None,
+    epc_rating: str = None,
+    min_efficiency: float = None,
+    max_efficiency: float = None,
+    sort_by: str = "sale_date",
+    order: str = "desc",
+    skip: int = 0,
+    limit: int = 50,
+):
+    query = db.query(models.PropertyRecord)
+
+    if postcode:
+        query = query.filter(models.PropertyRecord.postcode.ilike(f"%{postcode}%"))
+    if town_city:
+        query = query.filter(models.PropertyRecord.town_city.ilike(f"%{town_city}%"))
     if district:
-        query = query.filter(models.Location.district.ilike(f"%{district}%"))
-
-    if min_rent is not None:
-        query = query.filter(models.Listing.monthly_rent >= min_rent)
-
-    if max_rent is not None:
-        query = query.filter(models.Listing.monthly_rent <= max_rent)
-
-    if bedrooms is not None:
-        query = query.filter(models.Listing.bedrooms == bedrooms)
-
+        query = query.filter(models.PropertyRecord.district.ilike(f"%{district}%"))
+    if county:
+        query = query.filter(models.PropertyRecord.county.ilike(f"%{county}%"))
     if property_type:
-        query = query.filter(models.Listing.property_type.ilike(f"%{property_type}%"))
-
-    if is_active is not None:
-        query = query.filter(models.Listing.is_active == is_active)
+        query = query.filter(models.PropertyRecord.property_type.ilike(f"%{property_type}%"))
+    if min_price is not None:
+        query = query.filter(models.PropertyRecord.price >= min_price)
+    if max_price is not None:
+        query = query.filter(models.PropertyRecord.price <= max_price)
+    if date_from is not None:
+        query = query.filter(models.PropertyRecord.sale_date >= date_from)
+    if date_to is not None:
+        query = query.filter(models.PropertyRecord.sale_date <= date_to)
+    if epc_rating:
+        query = query.filter(models.PropertyRecord.current_energy_rating == epc_rating.upper())
+    if min_efficiency is not None:
+        query = query.filter(models.PropertyRecord.current_energy_efficiency >= min_efficiency)
+    if max_efficiency is not None:
+        query = query.filter(models.PropertyRecord.current_energy_efficiency <= max_efficiency)
 
     allowed_sort_fields = {
-        "monthly_rent": models.Listing.monthly_rent,
-        "bedrooms": models.Listing.bedrooms,
-        "bathrooms": models.Listing.bathrooms,
-        "available_from": models.Listing.available_from
+        "price": models.PropertyRecord.price,
+        "sale_date": models.PropertyRecord.sale_date,
+        "current_energy_efficiency": models.PropertyRecord.current_energy_efficiency,
+        "total_floor_area": models.PropertyRecord.total_floor_area,
     }
 
-    if sort_by in allowed_sort_fields:
-        sort_column = allowed_sort_fields[sort_by]
-        if order == "desc":
-            query = query.order_by(sort_column.desc())
-        else:
-            query = query.order_by(sort_column.asc())
+    sort_col = allowed_sort_fields.get(sort_by, models.PropertyRecord.sale_date)
+    query = query.order_by(desc(sort_col) if order == "desc" else asc(sort_col))
 
-    return query.all()
+    return query.offset(skip).limit(limit).all()
 
 
-def get_listing(db: Session, listing_id: int):
-    return db.query(models.Listing).filter(models.Listing.id == listing_id).first()
-
-
-def update_listing(db: Session, listing_id: int, listing: schemas.ListingCreate):
-    db_listing = get_listing(db, listing_id)
-
-    if db_listing is None:
+def delete_property(db: Session, property_id: int):
+    db_property = get_property(db, property_id)
+    if db_property is None:
         return None
-
-    db_listing.title = listing.title
-    db_listing.description = listing.description
-    db_listing.monthly_rent = listing.monthly_rent
-    db_listing.deposit = listing.deposit
-    db_listing.bedrooms = listing.bedrooms
-    db_listing.bathrooms = listing.bathrooms
-    db_listing.property_type = listing.property_type
-    db_listing.furnished = listing.furnished
-    db_listing.bills_included = listing.bills_included
-    db_listing.available_from = listing.available_from
-    db_listing.is_active = listing.is_active
-    db_listing.location_id = listing.location_id
-
+    db.delete(db_property)
     db.commit()
-    db.refresh(db_listing)
-    return db_listing
+    return db_property
 
 
-def delete_listing(db: Session, listing_id: int):
-    db_listing = get_listing(db, listing_id)
+def get_distinct_locations(db: Session):
+    rows = (
+        db.query(models.PropertyRecord.town_city)
+        .filter(models.PropertyRecord.town_city.isnot(None))
+        .distinct()
+        .order_by(models.PropertyRecord.town_city.asc())
+        .all()
+    )
+    return [r[0] for r in rows if r[0]]
 
-    if db_listing is None:
+
+def _filter_area(query, area: Optional[str]):
+    if area:
+        query = query.filter(models.PropertyRecord.town_city.ilike(f"%{area}%"))
+    return query
+
+def _get_area_column(area_type: Optional[str]):
+    allowed = {
+        "town_city": models.PropertyRecord.town_city,
+        "district": models.PropertyRecord.district,
+        "county": models.PropertyRecord.county,
+        "postcode": models.PropertyRecord.postcode,
+    }
+    return allowed.get(area_type or "town_city")
+
+
+def _filter_area_by_type(query, area_type: Optional[str], area: Optional[str]):
+    if area:
+        col = _get_area_column(area_type)
+        if col is not None:
+            query = query.filter(col.ilike(f"%{area}%"))
+    return query
+
+def get_location_summary(db: Session, area: str):
+    query = db.query(models.PropertyRecord)
+    query = _filter_area(query, area)
+
+    rows = query.all()
+    if not rows:
         return None
 
-    db.delete(db_listing)
-    db.commit()
-    return db_listing
-
-def get_average_rent(db: Session, city: str = None):
-    query = db.query(models.Listing).join(models.Location)
-
-    if city:
-        query = query.filter(models.Location.city.ilike(f"%{city}%"))
-
-    listings = query.all()
-
-    if not listings:
-        return None
-
-    average_rent = sum(listing.monthly_rent for listing in listings) / len(listings)
+    prices = [r.price for r in rows if r.price is not None]
+    efficiencies = [r.current_energy_efficiency for r in rows if r.current_energy_efficiency is not None]
+    floor_areas = [r.total_floor_area for r in rows if r.total_floor_area is not None]
 
     return {
-        "city": city,
-        "average_rent": round(average_rent, 2),
-        "listing_count": len(listings)
+        "location_name": area,
+        "listing_count": len(rows),
+        "average_price": round(sum(prices) / len(prices), 2) if prices else None,
+        "median_price": round(median(prices), 2) if prices else None,
+        "average_efficiency": round(sum(efficiencies) / len(efficiencies), 2) if efficiencies else None,
+        "average_floor_area": round(sum(floor_areas) / len(floor_areas), 2) if floor_areas else None,
     }
 
 
-def get_median_rent(db: Session, city: str = None):
-    query = db.query(models.Listing).join(models.Location)
+def get_average_price(db: Session, area: str = None):
+    query = db.query(
+        func.avg(models.PropertyRecord.price),
+        func.count(models.PropertyRecord.id),
+    )
+    query = _filter_area(query, area)
 
-    if city:
-        query = query.filter(models.Location.city.ilike(f"%{city}%"))
-
-    rents = sorted([listing.monthly_rent for listing in query.all()])
-
-    if not rents:
+    avg_price, count = query.first()
+    if not count:
         return None
 
-    n = len(rents)
-    mid = n // 2
-
-    if n % 2 == 0:
-        median = (rents[mid - 1] + rents[mid]) / 2
-    else:
-        median = rents[mid]
-
     return {
-        "city": city,
-        "median_rent": round(median, 2),
-        "listing_count": n
+        "area": area,
+        "average_price": round(float(avg_price), 2),
+        "count": count,
     }
 
 
-def get_summary_stats(db: Session, city: str = None):
-    query = db.query(models.Listing).join(models.Location)
+def get_median_price(db: Session, area: str = None):
+    query = db.query(models.PropertyRecord.price)
+    query = _filter_area(query, area)
+    prices = sorted([p[0] for p in query.all() if p[0] is not None])
 
-    if city:
-        query = query.filter(models.Location.city.ilike(f"%{city}%"))
-
-    listings = query.all()
-
-    if not listings:
+    if not prices:
         return None
-
-    rents = [listing.monthly_rent for listing in listings]
-    average_rent = sum(rents) / len(rents)
-
-    sorted_rents = sorted(rents)
-    n = len(sorted_rents)
-    mid = n // 2
-
-    if n % 2 == 0:
-        median_rent = (sorted_rents[mid - 1] + sorted_rents[mid]) / 2
-    else:
-        median_rent = sorted_rents[mid]
-
-    cheapest_listing = min(listings, key=lambda x: x.monthly_rent)
-    most_expensive_listing = max(listings, key=lambda x: x.monthly_rent)
 
     return {
-        "city": city,
-        "listing_count": len(listings),
-        "average_rent": round(average_rent, 2),
-        "median_rent": round(median_rent, 2),
-        "cheapest_listing": {
-            "id": cheapest_listing.id,
-            "title": cheapest_listing.title,
-            "monthly_rent": cheapest_listing.monthly_rent
-        },
-        "most_expensive_listing": {
-            "id": most_expensive_listing.id,
-            "title": most_expensive_listing.title,
-            "monthly_rent": most_expensive_listing.monthly_rent
-        }
+        "area": area,
+        "median_price": round(float(median(prices)), 2),
+        "count": len(prices),
     }
 
-def get_area_comparison(db: Session, city: str = None):
-    query = db.query(models.Listing).join(models.Location)
 
-    if city:
-        query = query.filter(models.Location.city.ilike(f"%{city}%"))
-
-    listings = query.all()
-
-    if not listings:
-        return None
-
-    district_data = {}
-
-    for listing in listings:
-        district = listing.location.district
-
-        if district not in district_data:
-            district_data[district] = []
-
-        district_data[district].append(listing.monthly_rent)
+def get_price_by_property_type(db: Session, area: str = None):
+    query = db.query(
+        models.PropertyRecord.property_type,
+        func.avg(models.PropertyRecord.price),
+        func.count(models.PropertyRecord.id),
+    )
+    query = _filter_area(query, area)
+    query = query.group_by(models.PropertyRecord.property_type)
 
     results = []
-
-    for district, rents in district_data.items():
-        rents_sorted = sorted(rents)
-        n = len(rents_sorted)
-        mid = n // 2
-
-        if n % 2 == 0:
-            median_rent = (rents_sorted[mid - 1] + rents_sorted[mid]) / 2
-        else:
-            median_rent = rents_sorted[mid]
-
-        average_rent = sum(rents_sorted) / n
-
+    for property_type, avg_price, count in query.all():
         results.append({
-            "district": district,
-            "listing_count": n,
-            "average_rent": round(average_rent, 2),
-            "median_rent": round(median_rent, 2)
+            "property_type": property_type,
+            "average_price": round(float(avg_price), 2),
+            "count": count,
         })
-
-    results.sort(key=lambda x: x["average_rent"], reverse=True)
-
-    return {
-        "city": city,
-        "areas": results
-    }
+    return results
 
 
-def get_outliers(db: Session, city: str = None):
-    query = db.query(models.Listing).join(models.Location)
+def get_epc_distribution(db: Session, area: str = None):
+    query = db.query(
+        models.PropertyRecord.current_energy_rating,
+        func.count(models.PropertyRecord.id),
+    )
+    query = _filter_area(query, area)
+    query = query.group_by(models.PropertyRecord.current_energy_rating)
+    query = query.order_by(models.PropertyRecord.current_energy_rating.asc())
 
-    if city:
-        query = query.filter(models.Location.city.ilike(f"%{city}%"))
+    return [
+        {
+            "current_energy_rating": rating,
+            "count": count,
+        }
+        for rating, count in query.all()
+    ]
 
-    listings = query.all()
 
-    if not listings:
+def get_efficiency_summary(db: Session, area: str = None):
+    query = db.query(
+        func.avg(models.PropertyRecord.current_energy_efficiency),
+        func.avg(models.PropertyRecord.potential_energy_efficiency),
+        func.count(models.PropertyRecord.id),
+    )
+    query = _filter_area(query, area)
+
+    avg_current, avg_potential, count = query.first()
+    if not count:
         return None
 
-    rents = [listing.monthly_rent for listing in listings]
-    n = len(rents)
+    return {
+        "area": area,
+        "average_current_efficiency": round(float(avg_current), 2) if avg_current is not None else None,
+        "average_potential_efficiency": round(float(avg_potential), 2) if avg_potential is not None else None,
+        "count": count,
+    }
 
-    if n < 2:
-        return {
-            "city": city,
-            "mean_rent": round(rents[0], 2),
-            "lower_threshold": round(rents[0], 2),
-            "upper_threshold": round(rents[0], 2),
-            "outliers": []
+
+def get_price_vs_efficiency(db: Session, area: str = None):
+    query = db.query(
+        models.PropertyRecord.current_energy_rating,
+        func.avg(models.PropertyRecord.price),
+        func.count(models.PropertyRecord.id),
+    )
+    query = _filter_area(query, area)
+    query = query.group_by(models.PropertyRecord.current_energy_rating)
+    query = query.order_by(models.PropertyRecord.current_energy_rating.asc())
+
+    return [
+        {
+            "current_energy_rating": rating,
+            "average_price": round(float(avg_price), 2),
+            "count": count,
         }
+        for rating, avg_price, count in query.all()
+    ]
 
-    mean_rent = sum(rents) / n
-    variance = sum((rent - mean_rent) ** 2 for rent in rents) / n
-    std_dev = variance ** 0.5
 
-    lower_threshold = mean_rent - 2 * std_dev
-    upper_threshold = mean_rent + 2 * std_dev
+def get_compare_locations(db: Session, area1: str, area2: str):
+    summary1 = get_location_summary(db, area1)
+    summary2 = get_location_summary(db, area2)
 
-    outliers = []
-
-    for listing in listings:
-        if listing.monthly_rent < lower_threshold or listing.monthly_rent > upper_threshold:
-            outliers.append({
-                "id": listing.id,
-                "title": listing.title,
-                "monthly_rent": listing.monthly_rent,
-                "district": listing.location.district,
-                "reason": "Below threshold" if listing.monthly_rent < lower_threshold else "Above threshold"
-            })
+    if summary1 is None or summary2 is None:
+        return None
 
     return {
-        "city": city,
-        "mean_rent": round(mean_rent, 2),
-        "lower_threshold": round(lower_threshold, 2),
-        "upper_threshold": round(upper_threshold, 2),
-        "outliers": outliers
+        "area1": area1,
+        "area2": area2,
+        "area1_average_price": summary1["average_price"],
+        "area2_average_price": summary2["average_price"],
+        "area1_average_efficiency": summary1["average_efficiency"],
+        "area2_average_efficiency": summary2["average_efficiency"],
+        "area1_count": summary1["listing_count"],
+        "area2_count": summary2["listing_count"],
     }
+
+def get_price_trend(
+    db: Session,
+    area_type: Optional[str] = "town_city",
+    area: Optional[str] = None,
+    property_type: Optional[str] = None,
+    interval: str = "year",
+    metric: str = "average",
+):
+    query = db.query(models.PropertyRecord).filter(models.PropertyRecord.sale_date.isnot(None))
+    query = _filter_area_by_type(query, area_type, area)
+
+    if property_type:
+        query = query.filter(models.PropertyRecord.property_type.ilike(f"%{property_type}%"))
+
+    rows = query.all()
+    if not rows:
+        return []
+
+    grouped = defaultdict(list)
+
+    for row in rows:
+        if row.sale_date is None or row.price is None:
+            continue
+
+        if interval == "month":
+            period = row.sale_date.strftime("%Y-%m")
+        else:
+            period = row.sale_date.strftime("%Y")
+
+        grouped[period].append(row.price)
+
+    results = []
+    for period in sorted(grouped.keys()):
+        prices = grouped[period]
+        results.append(
+            {
+                "period": period,
+                "average_price": round(sum(prices) / len(prices), 2) if prices else None,
+                "median_price": round(float(median(prices)), 2) if prices else None,
+                "sales_count": len(prices),
+            }
+        )
+
+    return results
+
+
+def get_energy_price_impact(
+    db: Session,
+    area_type: Optional[str] = "town_city",
+    area: Optional[str] = None,
+    property_type: Optional[str] = None,
+):
+    high_ratings = ["A", "B", "C"]
+    low_ratings = ["E", "F", "G"]
+
+    query = db.query(models.PropertyRecord)
+    query = _filter_area_by_type(query, area_type, area)
+
+    if property_type:
+        query = query.filter(models.PropertyRecord.property_type.ilike(f"%{property_type}%"))
+
+    rows = query.all()
+    if not rows:
+        return None
+
+    high_prices = [
+        row.price for row in rows
+        if row.price is not None and row.current_energy_rating in high_ratings
+    ]
+    low_prices = [
+        row.price for row in rows
+        if row.price is not None and row.current_energy_rating in low_ratings
+    ]
+
+    high_avg = round(sum(high_prices) / len(high_prices), 2) if high_prices else None
+    low_avg = round(sum(low_prices) / len(low_prices), 2) if low_prices else None
+
+    price_difference = None
+    percentage_difference = None
+    if high_avg is not None and low_avg is not None:
+        price_difference = round(high_avg - low_avg, 2)
+        if low_avg != 0:
+            percentage_difference = round(((high_avg - low_avg) / low_avg) * 100, 2)
+
+    return {
+        "area_type": area_type,
+        "area": area,
+        "property_type": property_type,
+        "high_efficiency_ratings": high_ratings,
+        "low_efficiency_ratings": low_ratings,
+        "high_efficiency_average_price": high_avg,
+        "low_efficiency_average_price": low_avg,
+        "price_difference": price_difference,
+        "percentage_difference": percentage_difference,
+        "high_efficiency_count": len(high_prices),
+        "low_efficiency_count": len(low_prices),
+    }
+
+
+def get_top_areas_by_price(
+    db: Session,
+    area_type: str = "town_city",
+    limit: int = 10,
+):
+    col = _get_area_column(area_type)
+    if col is None:
+        return []
+
+    query = db.query(col, models.PropertyRecord.price).filter(col.isnot(None))
+    rows = query.all()
+
+    grouped = defaultdict(list)
+    for area_name, price in rows:
+        if area_name and price is not None:
+            grouped[area_name].append(price)
+
+    results = []
+    for area_name, prices in grouped.items():
+        results.append(
+            {
+                "area_type": area_type,
+                "area_name": area_name,
+                "average_price": round(sum(prices) / len(prices), 2),
+                "median_price": round(float(median(prices)), 2),
+                "sales_count": len(prices),
+            }
+        )
+
+    results.sort(key=lambda x: (x["average_price"] is None, -(x["average_price"] or 0)))
+    return results[:limit]
+
+
+def get_sales_volume_trend(
+    db: Session,
+    area_type: Optional[str] = "town_city",
+    area: Optional[str] = None,
+    interval: str = "year",
+):
+    query = db.query(models.PropertyRecord).filter(models.PropertyRecord.sale_date.isnot(None))
+    query = _filter_area_by_type(query, area_type, area)
+
+    rows = query.all()
+    if not rows:
+        return []
+
+    grouped = defaultdict(int)
+
+    for row in rows:
+        if row.sale_date is None:
+            continue
+
+        if interval == "month":
+            period = row.sale_date.strftime("%Y-%m")
+        else:
+            period = row.sale_date.strftime("%Y")
+
+        grouped[period] += 1
+
+    return [
+        {"period": period, "sales_count": grouped[period]}
+        for period in sorted(grouped.keys())
+    ]
