@@ -1,12 +1,15 @@
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.database import engine
+from app.models import Base
 from app.routers import analytics, auth, energy_certificates, locations, properties
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    Base.metadata.create_all(bind=engine)
     yield
-
 app = FastAPI(
     title="House Sales and Energy Efficiency API",
     description=(
@@ -25,7 +28,18 @@ app = FastAPI(
     ],
 )
 
+allowed_origins = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:3000,http://127.0.0.1:3000"
+).split(",")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[origin.strip() for origin in allowed_origins if origin.strip()],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 @app.get("/", summary="API root", description="Returns API metadata and discoverable resource groups.")
 def root():
     return {
@@ -49,6 +63,13 @@ def root():
         },
     }
 
+@app.get("/health", tags=["Health"], summary="Health check")
+def health_check():
+    return {
+        "status": "ok",
+        "service": "House Sales and Energy Efficiency API",
+        "version": "3.0.0",
+    }
 app.include_router(auth.router)
 app.include_router(properties.router)
 app.include_router(locations.router)

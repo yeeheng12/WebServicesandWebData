@@ -71,3 +71,53 @@ def login_user(
 )
 def read_current_user(current_user = Depends(get_current_user)):
     return current_user
+
+@router.get(
+    "/users",
+    response_model=schemas.UserListResponse,
+    summary="List users",
+    description="Admin-only endpoint to list users.",
+)
+def list_users(
+    skip: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_admin),
+):
+    return crud.get_users(db=db, skip=skip, limit=limit)
+
+
+@router.patch(
+    "/users/{user_id}/role",
+    response_model=schemas.UserResponse,
+    summary="Update user role",
+    description="Admin-only endpoint to change a user's role.",
+)
+def change_user_role(
+    user_id: int,
+    payload: schemas.UserRoleUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_admin),
+):
+    user = crud.update_user_role(db=db, user_id=user_id, role=payload.role)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+@router.patch(
+    "/users/{user_id}/status",
+    response_model=schemas.UserResponse,
+    summary="Activate or deactivate user",
+    description="Admin-only endpoint to activate or deactivate a user.",
+)
+def change_user_status(
+    user_id: int,
+    payload: schemas.UserStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_admin),
+):
+    user = crud.update_user_active_status(db=db, user_id=user_id, is_active=payload.is_active)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user

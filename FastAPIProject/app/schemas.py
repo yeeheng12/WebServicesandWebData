@@ -27,6 +27,15 @@ class UserResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+class UserRoleUpdate(BaseModel):
+    role: str = Field(..., pattern="^(viewer|editor|admin)$")
+
+class UserStatusUpdate(BaseModel):
+    is_active: bool
+
+class UserListResponse(BaseModel):
+    items: list["UserResponse"]
+    total: int
 
 class TokenResponse(BaseModel):
     access_token: str

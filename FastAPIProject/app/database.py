@@ -5,12 +5,20 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./property_api.db")
 
 connect_args = {}
+engine_kwargs = {}
+
 if DATABASE_URL.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
+else:
+    engine_kwargs = {
+        "pool_pre_ping": True,
+        "pool_recycle": 300,
+    }
 
 engine = create_engine(
     DATABASE_URL,
     connect_args=connect_args,
+    **engine_kwargs,
 )
 
 if DATABASE_URL.startswith("sqlite"):

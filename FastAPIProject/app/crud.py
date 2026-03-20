@@ -15,10 +15,34 @@ from collections import defaultdict
 def get_user_by_username(db: Session, username: str):
     return db.query(models.User).filter(models.User.username == username).first()
 
-
 def get_user_by_email(db: Session, email: str):
     return db.query(models.User).filter(models.User.email == email).first()
 
+def get_users(db, skip: int = 0, limit: int = 50):
+    items = db.query(models.User).offset(skip).limit(limit).all()
+    total = db.query(models.User).count()
+    return {"items": items, "total": total}
+
+def get_user_by_id(db, user_id: int):
+    return db.query(models.User).filter(models.User.id == user_id).first()
+
+def update_user_role(db, user_id: int, role: str):
+    user = get_user_by_id(db, user_id)
+    if user is None:
+        return None
+    user.role = role
+    db.commit()
+    db.refresh(user)
+    return user
+
+def update_user_active_status(db, user_id: int, is_active: bool):
+    user = get_user_by_id(db, user_id)
+    if user is None:
+        return None
+    user.is_active = is_active
+    db.commit()
+    db.refresh(user)
+    return user
 
 def create_user(db: Session, user_data: schemas.UserCreate):
     if get_user_by_username(db, user_data.username):
