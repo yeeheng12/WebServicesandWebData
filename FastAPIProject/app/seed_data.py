@@ -8,7 +8,10 @@ from app.database import SessionLocal, engine
 from app.models import Base, PropertyRecord
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DATA_PATH = PROJECT_ROOT / "data" / "processed" / "property_records.csv"
+#local
+#DATA_PATH = PROJECT_ROOT / "data" / "processed" / "property_records.csv"
+#for deployment
+DATA_PATH = PROJECT_ROOT / "data" / "processed" / "property_records_deploy.csv"
 
 def parse_date(value):
     if pd.isna(value):

@@ -11,6 +11,20 @@ from sqlalchemy.orm import Session
 from app import models, schemas
 
 from collections import defaultdict
+from app.database import engine
+
+def _get_period_expression(interval: str):
+    dialect = engine.dialect.name
+
+    if dialect == "sqlite":
+        if interval == "month":
+            return func.strftime("%Y-%m", models.PropertyRecord.sale_date)
+        return func.strftime("%Y", models.PropertyRecord.sale_date)
+
+    # Postgres
+    if interval == "month":
+        return func.to_char(models.PropertyRecord.sale_date, "YYYY-MM")
+    return func.to_char(models.PropertyRecord.sale_date, "YYYY")
 
 def get_user_by_username(db: Session, username: str):
     return db.query(models.User).filter(models.User.username == username).first()
@@ -385,10 +399,7 @@ def get_price_trend(
     property_type: Optional[str] = None,
     interval: str = "year",
 ):
-    if interval == "month":
-        period_expr = func.strftime("%Y-%m", models.PropertyRecord.sale_date)
-    else:
-        period_expr = func.strftime("%Y", models.PropertyRecord.sale_date)
+    period_expr = _get_period_expression(interval)
 
     stats_query = db.query(
         period_expr.label("period"),
@@ -564,10 +575,7 @@ def get_sales_volume_trend(
     area: Optional[str] = None,
     interval: str = "year",
 ):
-    if interval == "month":
-        period_expr = func.strftime("%Y-%m", models.PropertyRecord.sale_date)
-    else:
-        period_expr = func.strftime("%Y", models.PropertyRecord.sale_date)
+    period_expr = _get_period_expression(interval)
 
     query = db.query(
         period_expr.label("period"),
