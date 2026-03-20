@@ -1,8 +1,48 @@
-from sqlalchemy import Column, Date, Float, ForeignKey, Index, Integer, String
+from sqlalchemy import Column, Date, DateTime, Float, ForeignKey, Index, Integer, String, func, Boolean
 from sqlalchemy.orm import relationship
 
 from app.database import Base
 
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+
+    # viewer, editor, admin
+    role = Column(String, nullable=False, default="viewer")
+    is_active = Column(Boolean, nullable=False, default=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    created_properties = relationship(
+        "PropertyRecord",
+        foreign_keys="PropertyRecord.created_by_user_id",
+        back_populates="created_by_user",
+    )
+    updated_properties = relationship(
+        "PropertyRecord",
+        foreign_keys="PropertyRecord.updated_by_user_id",
+        back_populates="updated_by_user",
+    )
+    created_certificates = relationship(
+        "EnergyCertificate",
+        foreign_keys="EnergyCertificate.created_by_user_id",
+        back_populates="created_by_user",
+    )
+    updated_certificates = relationship(
+        "EnergyCertificate",
+        foreign_keys="EnergyCertificate.updated_by_user_id",
+        back_populates="updated_by_user",
+    )
 
 class PropertyRecord(Base):
     __tablename__ = "property_records"
@@ -21,6 +61,28 @@ class PropertyRecord(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    updated_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+
+    created_by_user = relationship(
+        "User",
+        foreign_keys=[created_by_user_id],
+        back_populates="created_properties",
+    )
+    updated_by_user = relationship(
+        "User",
+        foreign_keys=[updated_by_user_id],
+        back_populates="updated_properties",
+    )
 
     transaction_id = Column(String, unique=True, index=True, nullable=True)
     price = Column(Float, index=True, nullable=False)
@@ -111,6 +173,28 @@ class EnergyCertificate(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     property_id = Column(Integer, ForeignKey("property_records.id"), nullable=False, index=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    updated_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+
+    created_by_user = relationship(
+        "User",
+        foreign_keys=[created_by_user_id],
+        back_populates="created_certificates",
+    )
+    updated_by_user = relationship(
+        "User",
+        foreign_keys=[updated_by_user_id],
+        back_populates="updated_certificates",
+    )
 
     lmk_key = Column(String, unique=True, index=True, nullable=True)
 

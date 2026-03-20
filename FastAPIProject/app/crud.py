@@ -1,5 +1,6 @@
 from __future__ import annotations
 from sqlalchemy.exc import IntegrityError
+from app.security import get_password_hash
 
 from statistics import median
 from typing import Optional
@@ -11,8 +12,40 @@ from app import models, schemas
 
 from collections import defaultdict
 
-def create_property(db: Session, property_data: schemas.PropertyCreate):
-    db_property = models.PropertyRecord(**property_data.model_dump())
+def get_user_by_username(db: Session, username: str):
+    return db.query(models.User).filter(models.User.username == username).first()
+
+
+def get_user_by_email(db: Session, email: str):
+    return db.query(models.User).filter(models.User.email == email).first()
+
+
+def create_user(db: Session, user_data: schemas.UserCreate):
+    if get_user_by_username(db, user_data.username):
+        return None, "duplicate_username"
+
+    if get_user_by_email(db, user_data.email):
+        return None, "duplicate_email"
+
+    db_user = models.User(
+        username=user_data.username,
+        email=user_data.email,
+        hashed_password=get_password_hash(user_data.password),
+        role=user_data.role,
+        is_active=True,
+    )
+
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user, None
+
+def create_property(db: Session, property_data: schemas.PropertyCreate, created_by_user_id: int | None = None):
+    db_property = models.PropertyRecord(
+        **property_data.model_dump(),
+        created_by_user_id=created_by_user_id,
+        updated_by_user_id=created_by_user_id,
+    )
     db.add(db_property)
 
     try:
@@ -31,15 +64,21 @@ def get_property(db: Session, property_id: int):
         .first()
     )
 
-def update_property(db: Session, property_id: int, property_data: schemas.PropertyUpdate):
+def update_property(
+    db: Session,
+    property_id: int,
+    property_data: schemas.PropertyUpdate,
+    updated_by_user_id: int | None = None,
+):
     db_property = get_property(db, property_id)
     if db_property is None:
         return None, "not_found"
 
     update_data = property_data.model_dump(exclude_unset=True)
-
     for field, value in update_data.items():
         setattr(db_property, field, value)
+
+    db_property.updated_by_user_id = updated_by_user_id
 
     try:
         db.commit()
@@ -71,15 +110,15 @@ def get_properties(
     query = db.query(models.PropertyRecord)
 
     if postcode:
-        query = query.filter(models.PropertyRecord.postcode.ilike(f"%{postcode}%"))
+        query = query.filter(func.lower(models.PropertyRecord.postcode) == postcode.lower())
     if town_city:
-        query = query.filter(models.PropertyRecord.town_city.ilike(f"%{town_city}%"))
+        query = query.filter(func.lower(models.PropertyRecord.town_city) == town_city.lower())
     if district:
-        query = query.filter(models.PropertyRecord.district.ilike(f"%{district}%"))
+        query = query.filter(func.lower(models.PropertyRecord.district) == district.lower())
     if county:
-        query = query.filter(models.PropertyRecord.county.ilike(f"%{county}%"))
+        query = query.filter(func.lower(models.PropertyRecord.county) == county.lower())
     if property_type:
-        query = query.filter(models.PropertyRecord.property_type.ilike(f"%{property_type}%"))
+        query = query.filter(func.lower(models.PropertyRecord.property_type) == property_type.lower())
     if min_price is not None:
         query = query.filter(models.PropertyRecord.price >= min_price)
     if max_price is not None:
@@ -105,7 +144,9 @@ def get_properties(
     sort_col = allowed_sort_fields.get(sort_by, models.PropertyRecord.sale_date)
     query = query.order_by(desc(sort_col) if order == "desc" else asc(sort_col))
 
-    return query.offset(skip).limit(limit).all()
+    total = query.count()
+    items = query.offset(skip).limit(limit).all()
+    return items, total
 
 
 def delete_property(db: Session, property_id: int):
@@ -130,7 +171,7 @@ def get_distinct_locations(db: Session):
 
 def _filter_area(query, area: Optional[str]):
     if area:
-        query = query.filter(models.PropertyRecord.town_city.ilike(f"%{area}%"))
+        query = query.filter(func.lower(models.PropertyRecord.town_city) == area.lower())
     return query
 
 def _get_area_column(area_type: Optional[str]):
@@ -147,7 +188,7 @@ def _filter_area_by_type(query, area_type: Optional[str], area: Optional[str]):
     if area:
         col = _get_area_column(area_type)
         if col is not None:
-            query = query.filter(col.ilike(f"%{area}%"))
+            query = query.filter(func.lower(col) == area.lower())
     return query
 
 def get_location_summary(db: Session, area: str):
@@ -337,7 +378,9 @@ def get_price_trend(
     stats_query = _filter_area_by_type(stats_query, area_type, area)
 
     if property_type:
-        stats_query = stats_query.filter(models.PropertyRecord.property_type.ilike(f"%{property_type}%"))
+        stats_query = stats_query.filter(
+            func.lower(models.PropertyRecord.property_type) == property_type.lower()
+        )
 
     stats_query = stats_query.group_by("period").order_by("period")
     stats_rows = stats_query.all()
@@ -356,7 +399,9 @@ def get_price_trend(
     price_query = _filter_area_by_type(price_query, area_type, area)
 
     if property_type:
-        price_query = price_query.filter(models.PropertyRecord.property_type.ilike(f"%{property_type}%"))
+        price_query = price_query.filter(
+            func.lower(models.PropertyRecord.property_type) == property_type.lower()
+        )
 
     grouped_prices = defaultdict(list)
     for period, price in price_query.all():
@@ -404,8 +449,12 @@ def get_energy_price_impact(
     low_query = _filter_area_by_type(low_query, area_type, area)
 
     if property_type:
-        high_query = high_query.filter(models.PropertyRecord.property_type.ilike(f"%{property_type}%"))
-        low_query = low_query.filter(models.PropertyRecord.property_type.ilike(f"%{property_type}%"))
+        high_query = high_query.filter(
+            func.lower(models.PropertyRecord.property_type) == property_type.lower()
+        )
+        low_query = low_query.filter(
+            func.lower(models.PropertyRecord.property_type) == property_type.lower()
+        )
 
     high_avg_raw, high_count = high_query.first()
     low_avg_raw, low_count = low_query.first()
@@ -591,12 +640,35 @@ def get_top_areas_by_energy_premium(
     )
     return results[:limit]
 
-def create_energy_certificate(db: Session, certificate_data: schemas.EnergyCertificateCreate):
+def build_pagination_meta(*, skip: int, limit: int, returned: int, total: int):
+    next_offset = skip + limit if skip + limit < total else None
+    previous_offset = max(skip - limit, 0) if skip > 0 else None
+
+    return {
+        "skip": skip,
+        "limit": limit,
+        "returned": returned,
+        "total": total,
+        "has_next": next_offset is not None,
+        "has_previous": skip > 0,
+        "next_offset": next_offset,
+        "previous_offset": previous_offset,
+    }
+
+def create_energy_certificate(
+    db: Session,
+    certificate_data: schemas.EnergyCertificateCreate,
+    created_by_user_id: int | None = None,
+):
     property_exists = get_property(db, certificate_data.property_id)
     if property_exists is None:
         return None, "property_not_found"
 
-    db_certificate = models.EnergyCertificate(**certificate_data.model_dump())
+    db_certificate = models.EnergyCertificate(
+        **certificate_data.model_dump(),
+        created_by_user_id=created_by_user_id,
+        updated_by_user_id=created_by_user_id,
+    )
     db.add(db_certificate)
 
     try:
@@ -627,18 +699,22 @@ def get_energy_certificates(
     if property_id is not None:
         query = query.filter(models.EnergyCertificate.property_id == property_id)
 
-    return (
+    total = query.count()
+
+    items = (
         query.order_by(models.EnergyCertificate.id.asc())
         .offset(skip)
         .limit(limit)
         .all()
     )
 
+    return items, total
 
 def update_energy_certificate(
     db: Session,
     certificate_id: int,
     certificate_data: schemas.EnergyCertificateUpdate,
+    updated_by_user_id: int | None = None,
 ):
     db_certificate = get_energy_certificate(db, certificate_id)
     if db_certificate is None:
@@ -653,6 +729,8 @@ def update_energy_certificate(
 
     for field, value in update_data.items():
         setattr(db_certificate, field, value)
+
+    db_certificate.updated_by_user_id = updated_by_user_id
 
     try:
         db.commit()
@@ -680,14 +758,20 @@ def get_property_energy_certificates(
 ):
     property_exists = get_property(db, property_id)
     if property_exists is None:
-        return None, "property_not_found"
+        return None, None, "property_not_found"
 
-    certificates = (
+    query = (
         db.query(models.EnergyCertificate)
         .filter(models.EnergyCertificate.property_id == property_id)
-        .order_by(models.EnergyCertificate.id.asc())
+    )
+
+    total = query.count()
+
+    certificates = (
+        query.order_by(models.EnergyCertificate.id.asc())
         .offset(skip)
         .limit(limit)
         .all()
     )
-    return certificates, None
+
+    return certificates, total, None

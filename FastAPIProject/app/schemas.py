@@ -1,9 +1,78 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
+from pydantic import BaseModel, Field, field_validator, EmailStr
 
-from pydantic import BaseModel, Field, field_validator
+class UserCreate(BaseModel):
+    username: str = Field(min_length=3, max_length=50)
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+    role: str = "viewer"
 
-class PropertyBase(BaseModel):
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, value):
+        if value not in {"viewer", "editor", "admin"}:
+            raise ValueError("role must be one of: viewer, editor, admin")
+        return value
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    email: EmailStr
+    role: str
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class LoginResponse(TokenResponse):
+    user: UserResponse
+
+class AuditFieldsMixin(BaseModel):
+    created_at: datetime
+    updated_at: datetime
+    created_by_user_id: Optional[int] = None
+    updated_by_user_id: Optional[int] = None
+
+class EnergyValidationMixin(BaseModel):
+    @field_validator("current_energy_rating", "potential_energy_rating", check_fields=False)
+    @classmethod
+    def validate_energy_rating(cls, value):
+        if value is None:
+            return value
+        value = value.upper()
+        if value not in {"A", "B", "C", "D", "E", "F", "G"}:
+            raise ValueError("energy rating must be one of: A, B, C, D, E, F, G")
+        return value
+
+    @field_validator("current_energy_efficiency", "potential_energy_efficiency", check_fields=False)
+    @classmethod
+    def validate_efficiency(cls, value):
+        if value is None:
+            return value
+        if value < 0 or value > 100:
+            raise ValueError("energy efficiency must be between 0 and 100")
+        return value
+
+    @field_validator("total_floor_area", check_fields=False)
+    @classmethod
+    def validate_floor_area(cls, value):
+        if value is None:
+            return value
+        if value < 0:
+            raise ValueError("total_floor_area must be non-negative")
+        return value
+
+class PropertyBase(EnergyValidationMixin):
     price: float = Field(..., gt=0)
     sale_date: Optional[date] = None
     postcode: Optional[str] = None
@@ -21,34 +90,6 @@ class PropertyBase(BaseModel):
     total_floor_area: Optional[float] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-
-    @field_validator("current_energy_rating", "potential_energy_rating")
-    @classmethod
-    def validate_energy_rating(cls, value):
-        if value is None:
-            return value
-        value = value.upper()
-        if value not in {"A", "B", "C", "D", "E", "F", "G"}:
-            raise ValueError("energy rating must be one of: A, B, C, D, E, F, G")
-        return value
-
-    @field_validator("current_energy_efficiency", "potential_energy_efficiency")
-    @classmethod
-    def validate_efficiency(cls, value):
-        if value is None:
-            return value
-        if value < 0 or value > 100:
-            raise ValueError("energy efficiency must be between 0 and 100")
-        return value
-
-    @field_validator("total_floor_area")
-    @classmethod
-    def validate_floor_area(cls, value):
-        if value is None:
-            return value
-        if value < 0:
-            raise ValueError("total_floor_area must be non-negative")
-        return value
 
 
 class PropertyCreate(PropertyBase):
@@ -71,7 +112,7 @@ class PropertyCreate(PropertyBase):
     region_code: Optional[str] = None
     country_code: Optional[str] = None
 
-class PropertyUpdate(BaseModel):
+class PropertyUpdate(EnergyValidationMixin):
     transaction_id: Optional[str] = None
     price: Optional[float] = Field(None, gt=0)
     sale_date: Optional[date] = None
@@ -113,35 +154,7 @@ class PropertyUpdate(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
 
-    @field_validator("current_energy_rating", "potential_energy_rating")
-    @classmethod
-    def validate_energy_rating(cls, value):
-        if value is None:
-            return value
-        value = value.upper()
-        if value not in {"A", "B", "C", "D", "E", "F", "G"}:
-            raise ValueError("energy rating must be one of: A, B, C, D, E, F, G")
-        return value
-
-    @field_validator("current_energy_efficiency", "potential_energy_efficiency")
-    @classmethod
-    def validate_efficiency(cls, value):
-        if value is None:
-            return value
-        if value < 0 or value > 100:
-            raise ValueError("energy efficiency must be between 0 and 100")
-        return value
-
-    @field_validator("total_floor_area")
-    @classmethod
-    def validate_floor_area(cls, value):
-        if value is None:
-            return value
-        if value < 0:
-            raise ValueError("total_floor_area must be non-negative")
-        return value
-
-class PropertyResponse(PropertyBase):
+class PropertyResponse(AuditFieldsMixin, PropertyBase):
     id: int
     transaction_id: Optional[str] = None
     old_new_flag: Optional[str] = None
@@ -165,11 +178,6 @@ class PropertyResponse(PropertyBase):
     class Config:
         from_attributes = True
 
-class PropertyListResponse(BaseModel):
-    items: list[PropertyResponse]
-    skip: int
-    limit: int
-    returned: int
 
 class LocationSummaryResponse(BaseModel):
     location_name: str
@@ -292,7 +300,7 @@ class TopAreasByEnergyPremiumItem(BaseModel):
     high_efficiency_count: int
     low_efficiency_count: int
 
-class EnergyCertificateBase(BaseModel):
+class EnergyCertificateBase(EnergyValidationMixin):
     property_id: int
     lmk_key: Optional[str] = None
     current_energy_rating: Optional[str] = None
@@ -312,40 +320,11 @@ class EnergyCertificateBase(BaseModel):
     heating_description: Optional[str] = None
     hotwater_description: Optional[str] = None
 
-    @field_validator("current_energy_rating", "potential_energy_rating")
-    @classmethod
-    def validate_energy_rating(cls, value):
-        if value is None:
-            return value
-        value = value.upper()
-        if value not in {"A", "B", "C", "D", "E", "F", "G"}:
-            raise ValueError("energy rating must be one of: A, B, C, D, E, F, G")
-        return value
-
-    @field_validator("current_energy_efficiency", "potential_energy_efficiency")
-    @classmethod
-    def validate_efficiency(cls, value):
-        if value is None:
-            return value
-        if value < 0 or value > 100:
-            raise ValueError("energy efficiency must be between 0 and 100")
-        return value
-
-    @field_validator("total_floor_area")
-    @classmethod
-    def validate_floor_area(cls, value):
-        if value is None:
-            return value
-        if value < 0:
-            raise ValueError("total_floor_area must be non-negative")
-        return value
-
-
 class EnergyCertificateCreate(EnergyCertificateBase):
     pass
 
 
-class EnergyCertificateUpdate(BaseModel):
+class EnergyCertificateUpdate(EnergyValidationMixin):
     property_id: Optional[int] = None
     lmk_key: Optional[str] = None
     current_energy_rating: Optional[str] = None
@@ -365,44 +344,29 @@ class EnergyCertificateUpdate(BaseModel):
     heating_description: Optional[str] = None
     hotwater_description: Optional[str] = None
 
-    @field_validator("current_energy_rating", "potential_energy_rating")
-    @classmethod
-    def validate_energy_rating(cls, value):
-        if value is None:
-            return value
-        value = value.upper()
-        if value not in {"A", "B", "C", "D", "E", "F", "G"}:
-            raise ValueError("energy rating must be one of: A, B, C, D, E, F, G")
-        return value
-
-    @field_validator("current_energy_efficiency", "potential_energy_efficiency")
-    @classmethod
-    def validate_efficiency(cls, value):
-        if value is None:
-            return value
-        if value < 0 or value > 100:
-            raise ValueError("energy efficiency must be between 0 and 100")
-        return value
-
-    @field_validator("total_floor_area")
-    @classmethod
-    def validate_floor_area(cls, value):
-        if value is None:
-            return value
-        if value < 0:
-            raise ValueError("total_floor_area must be non-negative")
-        return value
-
-
-class EnergyCertificateResponse(EnergyCertificateBase):
+class EnergyCertificateResponse(AuditFieldsMixin, EnergyCertificateBase):
     id: int
 
     class Config:
         from_attributes = True
 
 
-class EnergyCertificateListResponse(BaseModel):
-    items: list[EnergyCertificateResponse]
+class PaginationMeta(BaseModel):
     skip: int
     limit: int
     returned: int
+    total: int
+    has_next: bool
+    has_previous: bool
+    next_offset: Optional[int] = None
+    previous_offset: Optional[int] = None
+
+
+class PropertyListResponse(BaseModel):
+    items: list[PropertyResponse]
+    pagination: PaginationMeta
+
+
+class EnergyCertificateListResponse(BaseModel):
+    items: list[EnergyCertificateResponse]
+    pagination: PaginationMeta

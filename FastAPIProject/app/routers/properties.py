@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app import crud, schemas
 from app.dependencies import get_db
-from app.security import require_api_key
+from app.security import require_admin, require_editor
 
 router = APIRouter(prefix="/properties", tags=["Properties"])
 
@@ -82,7 +82,7 @@ def read_properties(
             detail="sort_by must be one of: price, sale_date, current_energy_efficiency, total_floor_area",
         )
 
-    items = crud.get_properties(
+    items, total = crud.get_properties(
         db=db,
         postcode=postcode,
         town_city=town_city,
@@ -104,9 +104,12 @@ def read_properties(
 
     return {
         "items": items,
-        "skip": skip,
-        "limit": limit,
-        "returned": len(items),
+        "pagination": crud.build_pagination_meta(
+            skip=skip,
+            limit=limit,
+            returned=len(items),
+            total=total,
+        ),
     }
 
 
@@ -205,20 +208,29 @@ def read_property(property_id: int, db: Session = Depends(get_db)):
             }
         },
         401: {
-            "description": "Missing API key",
+            "description": "Missing or invalid bearer token",
             "content": {
                 "application/json": {
-                    "example": {"detail": "Missing API key"}
+                    "example": {"detail": "Could not validate credentials"}
                 }
-            }
+            },
         },
         403: {
-            "description": "Invalid API key",
+            "description": "Forbidden or insufficient permissions",
             "content": {
                 "application/json": {
-                    "example": {"detail": "Invalid API key"}
+                    "examples": {
+                        "invalid_key": {
+                            "value": {"detail": "Could not validate credentials"}
+                        },
+                        "insufficient_permissions": {
+                            "value": {
+                                "detail": "Insufficient permissions: editor or admin role required"
+                            }
+                        },
+                    }
                 }
-            }
+            },
         },
         409: {
             "description": "Duplicate transaction_id",
@@ -233,10 +245,13 @@ def read_property(property_id: int, db: Session = Depends(get_db)):
 def create_property(
     property_data: schemas.PropertyCreate,
     db: Session = Depends(get_db),
-    _: str = Depends(require_api_key),
+    current_user = Depends(require_editor),
 ):
-    property_obj, error = crud.create_property(db=db, property_data=property_data)
-
+    property_obj, error = crud.create_property(
+        db=db,
+        property_data=property_data,
+        created_by_user_id=current_user.id,
+    )
     if error == "duplicate_transaction_id":
         raise HTTPException(status_code=409, detail="transaction_id already exists")
 
@@ -249,12 +264,29 @@ def create_property(
     description="Partially updates an existing property record by ID.",
     responses={
         401: {
-            "description": "Missing API key",
-            "content": {"application/json": {"example": {"detail": "Missing API key"}}},
+            "description": "Missing or invalid bearer token",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Could not validate credentials"}
+                }
+            },
         },
         403: {
-            "description": "Invalid API key",
-            "content": {"application/json": {"example": {"detail": "Invalid API key"}}},
+            "description": "Forbidden or insufficient permissions",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "invalid_key": {
+                            "value": {"detail": "Could not validate credentials"}
+                        },
+                        "insufficient_permissions": {
+                            "value": {
+                                "detail": "Insufficient permissions: editor or admin role required"
+                            }
+                        },
+                    }
+                }
+            },
         },
         404: {
             "description": "Property not found",
@@ -286,12 +318,13 @@ def update_property(
     property_id: int,
     property_data: schemas.PropertyUpdate,
     db: Session = Depends(get_db),
-    _: str = Depends(require_api_key),
+    current_user = Depends(require_editor),
 ):
     updated_property, error = crud.update_property(
         db=db,
         property_id=property_id,
-        property_data=property_data
+        property_data=property_data,
+        updated_by_user_id=current_user.id,
     )
 
     if error == "not_found":
@@ -311,12 +344,29 @@ def update_property(
     responses={
         204: {"description": "Property deleted successfully"},
         401: {
-            "description": "Missing API key",
-            "content": {"application/json": {"example": {"detail": "Missing API key"}}},
+            "description": "Missing or invalid bearer token",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Could not validate credentials"}
+                }
+            },
         },
         403: {
-            "description": "Invalid API key",
-            "content": {"application/json": {"example": {"detail": "Invalid API key"}}},
+            "description": "Forbidden or insufficient permissions",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "invalid_key": {
+                            "value": {"detail": "Could not validate credentials"}
+                        },
+                        "insufficient_permissions": {
+                            "value": {
+                                "detail": "Insufficient permissions: admin role required"
+                            }
+                        },
+                    }
+                }
+            },
         },
         404: {
             "description": "Property not found",
@@ -327,7 +377,7 @@ def update_property(
 def delete_property(
     property_id: int,
     db: Session = Depends(get_db),
-    _: str = Depends(require_api_key),
+    _ = Depends(require_admin),
 ):
     deleted_property = crud.delete_property(db=db, property_id=property_id)
     if deleted_property is None:
@@ -346,18 +396,22 @@ def read_property_energy_certificates(
     limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
 ):
-    certificates, error = crud.get_property_energy_certificates(
+    certificates, total, error = crud.get_property_energy_certificates(
         db=db,
         property_id=property_id,
         skip=skip,
         limit=limit,
     )
+
     if error == "property_not_found":
         raise HTTPException(status_code=404, detail="Property not found")
 
     return {
         "items": certificates,
-        "skip": skip,
-        "limit": limit,
-        "returned": len(certificates),
+        "pagination": crud.build_pagination_meta(
+            skip=skip,
+            limit=limit,
+            returned=len(certificates),
+            total=total,
+        ),
     }
