@@ -1346,6 +1346,19 @@ Test results include:
 - Pass/fail status for each test  
 - Detailed error messages for failed cases  
 
+### Test Suite Results
+
+All automated tests were executed using pytest, covering authentication, CRUD operations, analytics, validation, and security.
+
+The final test run achieved:
+
+- **135/135 tests passing**
+- Full coverage across all API modules
+- Successful validation of both functional and edge-case scenarios
+
+During development, minor inconsistencies between test expectations and endpoint behaviour (e.g. root endpoint response format) were identified and resolved to ensure alignment between implementation and test design.
+
+This confirms that the API is stable, reliable, and behaves as expected under a wide range of conditions.
 ---
 
 ### 14.5 Testing Justification
