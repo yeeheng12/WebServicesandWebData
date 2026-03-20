@@ -56,12 +56,16 @@ def db_session():
     transaction = connection.begin()
     session = TestingSessionLocal(bind=connection)
 
-    yield session
-
-    session.close()
-    transaction.rollback()
-    connection.close()
-
+    try:
+        yield session
+    finally:
+        try:
+            session.close()
+        finally:
+            if transaction.is_active:
+                transaction.rollback()
+            if not connection.closed:
+                connection.close()
 
 @pytest.fixture()
 def client(db_session):

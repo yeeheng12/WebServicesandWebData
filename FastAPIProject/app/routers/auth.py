@@ -8,7 +8,6 @@ from app.security import authenticate_user, create_access_token, get_current_use
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-
 @router.post(
     "/register",
     response_model=schemas.UserResponse,
@@ -20,20 +19,19 @@ def register_user(
     user_data: schemas.UserCreate,
     db: Session = Depends(get_db),
 ):
-    user, error = crud.create_user(db=db, user_data=user_data)
-
-    if error == "duplicate_username":
-        raise HTTPException(status_code=409, detail="username already exists")
-    if error == "duplicate_email":
-        raise HTTPException(status_code=409, detail="email already exists")
-
     safe_user_data = schemas.UserCreate(
         username=user_data.username,
         email=user_data.email,
         password=user_data.password,
         role="viewer",
     )
+
     user, error = crud.create_user(db=db, user_data=safe_user_data)
+
+    if error == "duplicate_username":
+        raise HTTPException(status_code=409, detail="username already exists")
+    if error == "duplicate_email":
+        raise HTTPException(status_code=409, detail="email already exists")
 
     return user
 

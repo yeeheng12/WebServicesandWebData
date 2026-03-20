@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from typing import Optional
-from pydantic import BaseModel, Field, field_validator, EmailStr
+from pydantic import BaseModel, Field, field_validator, EmailStr, ConfigDict
 
 class UserCreate(BaseModel):
     username: str = Field(min_length=3, max_length=50)
@@ -25,8 +25,7 @@ class UserResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TokenResponse(BaseModel):
@@ -175,8 +174,7 @@ class PropertyResponse(AuditFieldsMixin, PropertyBase):
     region_code: Optional[str] = None
     country_code: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LocationSummaryResponse(BaseModel):
@@ -210,16 +208,12 @@ class LinksResponse(BaseModel):
 class PropertyDetailResponse(PropertyResponse):
     links: LinksResponse = Field(alias="_links")
 
-    class Config:
-        from_attributes = True
-        populate_by_name = True
-
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 class LocationSummaryWithLinksResponse(LocationSummaryResponse):
     links: LinksResponse = Field(alias="_links")
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 class PriceByTypeItem(BaseModel):
     property_type: Optional[str]
@@ -347,8 +341,7 @@ class EnergyCertificateUpdate(EnergyValidationMixin):
 class EnergyCertificateResponse(AuditFieldsMixin, EnergyCertificateBase):
     id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PaginationMeta(BaseModel):
