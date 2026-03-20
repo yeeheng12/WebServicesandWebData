@@ -1,8 +1,7 @@
 from datetime import date
 from typing import Optional
 
-from pydantic import BaseModel, Field
-
+from pydantic import BaseModel, Field, field_validator
 
 class PropertyBase(BaseModel):
     price: float = Field(..., gt=0)
@@ -22,6 +21,34 @@ class PropertyBase(BaseModel):
     total_floor_area: Optional[float] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+
+    @field_validator("current_energy_rating", "potential_energy_rating")
+    @classmethod
+    def validate_energy_rating(cls, value):
+        if value is None:
+            return value
+        value = value.upper()
+        if value not in {"A", "B", "C", "D", "E", "F", "G"}:
+            raise ValueError("energy rating must be one of: A, B, C, D, E, F, G")
+        return value
+
+    @field_validator("current_energy_efficiency", "potential_energy_efficiency")
+    @classmethod
+    def validate_efficiency(cls, value):
+        if value is None:
+            return value
+        if value < 0 or value > 100:
+            raise ValueError("energy efficiency must be between 0 and 100")
+        return value
+
+    @field_validator("total_floor_area")
+    @classmethod
+    def validate_floor_area(cls, value):
+        if value is None:
+            return value
+        if value < 0:
+            raise ValueError("total_floor_area must be non-negative")
+        return value
 
 
 class PropertyCreate(PropertyBase):
@@ -86,6 +113,34 @@ class PropertyUpdate(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
 
+    @field_validator("current_energy_rating", "potential_energy_rating")
+    @classmethod
+    def validate_energy_rating(cls, value):
+        if value is None:
+            return value
+        value = value.upper()
+        if value not in {"A", "B", "C", "D", "E", "F", "G"}:
+            raise ValueError("energy rating must be one of: A, B, C, D, E, F, G")
+        return value
+
+    @field_validator("current_energy_efficiency", "potential_energy_efficiency")
+    @classmethod
+    def validate_efficiency(cls, value):
+        if value is None:
+            return value
+        if value < 0 or value > 100:
+            raise ValueError("energy efficiency must be between 0 and 100")
+        return value
+
+    @field_validator("total_floor_area")
+    @classmethod
+    def validate_floor_area(cls, value):
+        if value is None:
+            return value
+        if value < 0:
+            raise ValueError("total_floor_area must be non-negative")
+        return value
+
 class PropertyResponse(PropertyBase):
     id: int
     transaction_id: Optional[str] = None
@@ -136,6 +191,27 @@ class MedianPriceResponse(BaseModel):
     median_price: float
     count: int
 
+class LinksResponse(BaseModel):
+    self: str
+    related_area_properties: Optional[str] = None
+    price_trend: Optional[str] = None
+    energy_price_impact: Optional[str] = None
+    energy_certificates: Optional[str] = None
+
+
+class PropertyDetailResponse(PropertyResponse):
+    links: LinksResponse = Field(alias="_links")
+
+    class Config:
+        from_attributes = True
+        populate_by_name = True
+
+
+class LocationSummaryWithLinksResponse(LocationSummaryResponse):
+    links: LinksResponse = Field(alias="_links")
+
+    class Config:
+        populate_by_name = True
 
 class PriceByTypeItem(BaseModel):
     property_type: Optional[str]
@@ -203,3 +279,130 @@ class TopAreasByPriceItem(BaseModel):
 class SalesVolumeTrendItem(BaseModel):
     period: str
     sales_count: int
+
+class TopAreasByEnergyPremiumItem(BaseModel):
+    area_type: str
+    area_name: str
+    high_efficiency_ratings: list[str]
+    low_efficiency_ratings: list[str]
+    high_efficiency_average_price: Optional[float]
+    low_efficiency_average_price: Optional[float]
+    price_difference: Optional[float]
+    percentage_difference: Optional[float]
+    high_efficiency_count: int
+    low_efficiency_count: int
+
+class EnergyCertificateBase(BaseModel):
+    property_id: int
+    lmk_key: Optional[str] = None
+    current_energy_rating: Optional[str] = None
+    potential_energy_rating: Optional[str] = None
+    current_energy_efficiency: Optional[float] = None
+    potential_energy_efficiency: Optional[float] = None
+    total_floor_area: Optional[float] = None
+    lodgement_date: Optional[date] = None
+    inspection_date: Optional[date] = None
+    tenure: Optional[str] = None
+    built_form: Optional[str] = None
+    mains_gas_flag: Optional[str] = None
+    windows_description: Optional[str] = None
+    walls_description: Optional[str] = None
+    roof_description: Optional[str] = None
+    floor_description: Optional[str] = None
+    heating_description: Optional[str] = None
+    hotwater_description: Optional[str] = None
+
+    @field_validator("current_energy_rating", "potential_energy_rating")
+    @classmethod
+    def validate_energy_rating(cls, value):
+        if value is None:
+            return value
+        value = value.upper()
+        if value not in {"A", "B", "C", "D", "E", "F", "G"}:
+            raise ValueError("energy rating must be one of: A, B, C, D, E, F, G")
+        return value
+
+    @field_validator("current_energy_efficiency", "potential_energy_efficiency")
+    @classmethod
+    def validate_efficiency(cls, value):
+        if value is None:
+            return value
+        if value < 0 or value > 100:
+            raise ValueError("energy efficiency must be between 0 and 100")
+        return value
+
+    @field_validator("total_floor_area")
+    @classmethod
+    def validate_floor_area(cls, value):
+        if value is None:
+            return value
+        if value < 0:
+            raise ValueError("total_floor_area must be non-negative")
+        return value
+
+
+class EnergyCertificateCreate(EnergyCertificateBase):
+    pass
+
+
+class EnergyCertificateUpdate(BaseModel):
+    property_id: Optional[int] = None
+    lmk_key: Optional[str] = None
+    current_energy_rating: Optional[str] = None
+    potential_energy_rating: Optional[str] = None
+    current_energy_efficiency: Optional[float] = None
+    potential_energy_efficiency: Optional[float] = None
+    total_floor_area: Optional[float] = None
+    lodgement_date: Optional[date] = None
+    inspection_date: Optional[date] = None
+    tenure: Optional[str] = None
+    built_form: Optional[str] = None
+    mains_gas_flag: Optional[str] = None
+    windows_description: Optional[str] = None
+    walls_description: Optional[str] = None
+    roof_description: Optional[str] = None
+    floor_description: Optional[str] = None
+    heating_description: Optional[str] = None
+    hotwater_description: Optional[str] = None
+
+    @field_validator("current_energy_rating", "potential_energy_rating")
+    @classmethod
+    def validate_energy_rating(cls, value):
+        if value is None:
+            return value
+        value = value.upper()
+        if value not in {"A", "B", "C", "D", "E", "F", "G"}:
+            raise ValueError("energy rating must be one of: A, B, C, D, E, F, G")
+        return value
+
+    @field_validator("current_energy_efficiency", "potential_energy_efficiency")
+    @classmethod
+    def validate_efficiency(cls, value):
+        if value is None:
+            return value
+        if value < 0 or value > 100:
+            raise ValueError("energy efficiency must be between 0 and 100")
+        return value
+
+    @field_validator("total_floor_area")
+    @classmethod
+    def validate_floor_area(cls, value):
+        if value is None:
+            return value
+        if value < 0:
+            raise ValueError("total_floor_area must be non-negative")
+        return value
+
+
+class EnergyCertificateResponse(EnergyCertificateBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
+class EnergyCertificateListResponse(BaseModel):
+    items: list[EnergyCertificateResponse]
+    skip: int
+    limit: int
+    returned: int

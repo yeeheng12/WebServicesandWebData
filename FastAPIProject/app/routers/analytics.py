@@ -118,6 +118,36 @@ def price_trend(
     response_model=schemas.EnergyPriceImpactResponse,
     summary="Measure energy efficiency price impact",
     description="Compares average prices of higher-efficiency homes against lower-efficiency homes, optionally filtered by area and property type.",
+    responses={
+        200: {
+            "description": "Energy price impact calculated successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "area_type": "town_city",
+                        "area": "Leeds",
+                        "property_type": None,
+                        "high_efficiency_ratings": ["A", "B", "C"],
+                        "low_efficiency_ratings": ["E", "F", "G"],
+                        "high_efficiency_average_price": 312450.25,
+                        "low_efficiency_average_price": 248220.8,
+                        "price_difference": 64229.45,
+                        "percentage_difference": 25.88,
+                        "high_efficiency_count": 180,
+                        "low_efficiency_count": 240
+                    }
+                }
+            }
+        },
+        404: {
+            "description": "No matching properties found",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "No matching properties found"}
+                }
+            }
+        }
+    },
 )
 def energy_price_impact(
     area_type: Literal["town_city", "district", "county", "postcode"] = "town_city",
@@ -149,7 +179,25 @@ def top_areas_by_price(
 ):
     return crud.get_top_areas_by_price(db=db, area_type=area_type, limit=limit)
 
-
+@router.get(
+    "/top-areas-by-energy-premium",
+    response_model=List[schemas.TopAreasByEnergyPremiumItem],
+    summary="Rank areas by energy-efficiency price premium",
+    description=(
+        "Returns areas where higher-efficiency homes (A/B/C) have the "
+        "largest average sale price premium over lower-efficiency homes (E/F/G)."
+    ),
+)
+def top_areas_by_energy_premium(
+    area_type: Literal["town_city", "district", "county", "postcode"] = "town_city",
+    limit: int = Query(default=10, ge=1, le=50),
+    db: Session = Depends(get_db),
+):
+    return crud.get_top_areas_by_energy_premium(
+        db=db,
+        area_type=area_type,
+        limit=limit,
+    )
 @router.get(
     "/sales-volume-trend",
     response_model=List[schemas.SalesVolumeTrendItem],

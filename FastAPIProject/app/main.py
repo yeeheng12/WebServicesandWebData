@@ -2,6 +2,7 @@ from fastapi import FastAPI
 
 from app.database import Base, engine
 from app.routers import analytics, locations, properties
+from app.routers import energy_certificates
 
 Base.metadata.create_all(bind=engine)
 
@@ -10,7 +11,8 @@ app = FastAPI(
     description=(
         "A RESTful API for querying UK house sale records enriched with "
         "energy efficiency and location data. "
-        "Write operations on /properties require an API key via the X-API-Key header."
+        "Write operations on /properties and /energy-certificates "
+        "require an API key via the X-API-Key header."
     ),
     version="2.1.0",
 )
@@ -22,9 +24,18 @@ def root():
         "message": "House Sales and Energy Efficiency API is running",
         "version": "2.1.0",
         "docs_url": "/docs",
-        "resources": ["/properties", "/locations", "/analytics"],
+        "resources": [
+            "/properties",
+            "/locations",
+            "/analytics",
+            "/energy-certificates",
+        ],
         "security": {
-            "write_endpoints_require_header": "X-API-Key"
+            "write_endpoints_require_header": "X-API-Key",
+            "protected_resources": [
+                "/properties",
+                "/energy-certificates",
+            ],
         },
     }
 
@@ -32,3 +43,4 @@ def root():
 app.include_router(properties.router)
 app.include_router(locations.router)
 app.include_router(analytics.router)
+app.include_router(energy_certificates.router)
