@@ -2,117 +2,72 @@
 
 ## 1. Project Overview
 
-The House Sales and Energy Efficiency API is a data-driven RESTful web service for exploring UK residential property sales enriched with Energy Performance Certificate (EPC) and location information. The project is built around a relational backend and exposes a structured HTTP interface for both operational data access and higher-level market analysis. In practice, the API allows users to retrieve and manage property and energy certificate records, and to generate aggregated insights such as average and median prices, price trends over time, EPC distributions, price-versus-efficiency comparisons, area rankings, and location-based summaries. These capabilities are reflected directly in the implemented application structure, database models, and analytics endpoints. 
+The House Sales and Energy Efficiency API is a RESTful web service designed to provide structured access to UK residential property sales data enriched with Energy Performance Certificate (EPC) and location information. The system integrates multiple datasets into a unified backend service, enabling both record-level data retrieval and higher-level analytical exploration.
 
-This project was developed for the COMP3011 Web Services and Web Data coursework, which requires designing and implementing a fully functional data-driven API with database integration, providing a clear design justification and strong supporting documentation. The brief places particular emphasis on software engineering quality, the explanation of technical choices, and the quality of submitted deliverables, including the GitHub repository, README, API documentation, and technical report. This API meets the minimum CRUD requirements and also shows a broader, more professional standard of API design. 
+The API is built using FastAPI with a relational database backend and exposes well-defined HTTP endpoints for interacting with property, energy, and location data. It also includes analytical capabilities such as price trends, EPC distributions, and location-based comparisons, allowing users to explore relationships between housing prices and energy efficiency.
 
-From a domain perspective, the API addresses a meaningful real-world problem: housing market information is often fragmented across multiple sources, with sale prices, EPC data, and postcode-based geographic information stored separately and in different formats. This project combines those sources into a single coherent service so that users can examine both individual records and wider patterns in the data. The system therefore supports two complementary use cases: first, standard record-level access and management through RESTful resources; second, analytical exploration of how house prices relate to energy efficiency and location. The dataset construction pipeline reflects this goal by cleaning, preparing, and merging multiple data sources into a deployment-ready structure for the API. 
+Developed for the COMP3011 Web Services and Web Data module, the project demonstrates key software engineering principles including RESTful design, database integration, authentication, testing, and deployment readiness. The system is designed as a complete backend service with clear structure, maintainability, and extensibility.
 
-Technically, the API is implemented using FastAPI and organised into clearly separated route groups for Authentication, Properties, Energy Certificates, Locations, and Analytics. It also provides service-level metadata through `/info`, a health check through `/health`, and interactive OpenAPI documentation through `/docs` and `/redoc`, making it easy to inspect, test, and demonstrate. This organisation improves maintainability and helps present the project as a complete backend service rather than a collection of disconnected endpoints.
-
-The project also reflects key ideas from the module. It uses HTTP methods and resource-oriented URIs to expose data through a uniform interface, returns machine-readable JSON representations, and follows a stateless authentication model using bearer tokens. At the same time, it extends beyond basic CRUD by including analytical endpoints that provide useful summaries and comparisons over real housing data. This makes the API more substantial, more realistic, and better aligned with the coursework’s encouragement to build creative, technically meaningful systems rather than only minimal implementations. 
-
-Overall, the House Sales and Energy Efficiency API should be understood as a complete backend service that integrates data engineering, RESTful API design, database modelling, authentication, analytics, testing, and deployment readiness into a single coherent system. Its purpose is to provide a practical and extensible platform for querying, comparing, and analysing UK housing market data in a way that is both technically robust and academically well justified.
+---
 
 ## 2. Objectives and Scope
 
-The primary objective of this project is to design and implement a robust, data-driven RESTful API that enables users to access, manage, and analyse UK residential property sales data enriched with Energy Performance Certificate (EPC) and location information. The API is intended to demonstrate both practical software engineering skills and a clear understanding of web service design principles as required by the COMP3011 module.
+The primary objective of this project is to design and implement a robust, data-driven RESTful API that supports secure access, management, and analysis of UK housing data.
 
-At a functional level, the system aims to:
-- Provide structured access to property and energy certificate data through well-defined RESTful endpoints  
-- Support full CRUD operations for core resources (properties and energy certificates)  
-- Enable advanced querying through filtering, sorting, and pagination mechanisms  
-- Deliver analytical insights such as price trends, EPC distributions, and comparisons between locations  
-- Enforce secure access control using JWT-based authentication and role-based authorisation  
+The system aims to:
+- Provide structured access to property and EPC data through RESTful endpoints  
+- Support full CRUD operations for core resources  
+- Enable flexible querying using filtering, sorting, and pagination  
+- Deliver analytical insights such as price trends and EPC distributions  
+- Enforce secure access control using JWT-based authentication and role-based authorization  
 
-Beyond functionality, an important objective is to ensure the API is designed to a professional standard. This includes:
-- Clear separation of concerns (routing, business logic, database access)  
-- Consistent request and response structures  
-- Meaningful error handling and validation  
-- Maintainable and scalable project structure  
+The scope of the project is limited to backend API development. The system operates on a preprocessed dataset and focuses on descriptive analytics rather than predictive modelling. While the API is designed to be deployment-ready, advanced production features such as distributed scaling and monitoring are not fully implemented within this coursework.
 
-The project focuses on backend API development and does not include a frontend user interface. Instead, interaction with the system is intended through HTTP requests via tools such as Swagger UI, Postman, or automated test suites. The API is designed to be self-descriptive through OpenAPI documentation, allowing users to explore and test endpoints without additional client applications.
-
-The project operates on a preprocessed dataset that merges property sales records with EPC and location data. The scope includes data cleaning, transformation, and preparation via dedicated scripts, but does not include real-time data ingestion or external API integration.
-
-It is also important to define what is intentionally out of scope. The API focuses on descriptive analytics rather than predictive modelling, providing insights based on existing data rather than forecasting future trends. Additionally, while the system is designed to be deployment-ready, aspects such as distributed scaling, caching layers, and full production monitoring are not implemented within this coursework.
-
-Overall, the project aims to balance completeness and clarity by delivering a fully functional, well-structured API that demonstrates key concepts from the module, while remaining focused on the core requirements of data access, analysis, and secure web service design.
+---
 
 ## 3. Key Features
 
-The API provides a range of features that go beyond basic data retrieval, combining standard RESTful operations with analytical capabilities and secure access control.
+The API provides the following core features:
 
-### RESTful Resource Management
-- Fully RESTful design using standard HTTP methods (GET, POST, PUT/PATCH, DELETE)  
-- Resource-based endpoints for properties, energy certificates, locations, and analytics  
-- Consistent URI structure and response formats across all endpoints  
+### RESTful Design
+- Resource-based endpoints using standard HTTP methods (GET, POST, PUT, DELETE)  
+- Consistent URI structure and JSON response format  
 
 ### CRUD Operations
-- Create, retrieve, update, and delete operations for:
-  - Property records  
-  - Energy certificates  
-- Support for partial updates using PATCH  
-- Enforcement of data integrity (e.g. unique transaction IDs, valid foreign key relationships)  
+- Create, retrieve, update, and delete property and energy certificate records  
+- Support for partial updates and data integrity constraints  
 
 ### Advanced Querying
-- Flexible filtering on multiple fields, including:
-  - Location (town/city, postcode)  
-  - Price range  
-  - Date range  
-  - Property type  
-  - Energy rating and efficiency  
-- Sorting by fields such as price and sale date  
-- Pagination support with metadata (total, limit, offset, navigation flags)  
+- Filtering by location, price range, date, property type, and energy rating  
+- Sorting and pagination for efficient data retrieval  
 
-### Analytical Endpoints
-- Aggregated insights derived from the dataset, including:
-  - Average and median property prices  
-  - Price trends over time (monthly and yearly)  
-  - EPC rating distribution  
-  - Price vs energy efficiency comparisons  
-  - Top-performing areas based on price or energy premium  
-  - Location comparison across multiple regions  
-- Designed to extend beyond CRUD and provide meaningful data exploration  
+### Analytical Capabilities
+- Price trends over time  
+- EPC rating distributions  
+- Price vs energy efficiency comparisons  
+- Area-based rankings and comparisons  
 
-### Location-Based Insights
-- Summary endpoints for specific locations  
-- Aggregated statistics such as average price, median price, and efficiency  
-- Inclusion of HATEOAS-style links to related resources (e.g. properties and analytics for the same area)  
-
-### Authentication and Authorisation
-- JWT-based authentication using OAuth2 password flow  
-- Role-based access control:
-  - Viewer: read-only access  
-  - Editor: create and update resources  
-  - Admin: full access, including deletion  
-- Protection of write operations and sensitive endpoints  
+### Authentication and Authorization
+- JWT-based authentication (OAuth2 password flow)  
+- Role-based access control (viewer, editor, admin)  
 
 ### Data Validation and Error Handling
-- Strong input validation using Pydantic schemas  
-- Validation of ranges (price, efficiency, dates) and categorical values (EPC ratings)  
-- Clear and consistent error responses (e.g. 400, 401, 403, 404, 409, 422)  
-- Prevention of invalid or inconsistent data being stored  
-
-### Service Metadata and Documentation
-- Interactive API documentation via Swagger UI (`/docs`)  
-- Alternative documentation via ReDoc (`/redoc`)  
-- Service metadata endpoint (`/info`)  
-- Health check endpoint (`/health`) for monitoring system status  
+- Input validation using Pydantic schemas  
+- Standardised error responses and status codes  
 
 ### Testing and Reliability
-- Comprehensive automated test suite using pytest  
-- Coverage of authentication, CRUD operations, analytics, validation, and security  
-- Use of isolated test database and fixtures to ensure consistent and repeatable testing  
+- Automated testing using pytest  
+- Coverage of authentication, CRUD operations, analytics, and validation  
 
 ### Data Processing Pipeline
-- Dedicated scripts for:
-  - Cleaning raw datasets  
-  - Merging property, EPC, and location data  
-  - Generating deployment-ready datasets  
-- Ensures the API operates on consistent and well-structured data  
+- Preprocessing scripts for cleaning and merging datasets  
+- Deployment-ready dataset for efficient seeding  
 
-Overall, these features combine to create a complete and practical API that supports both operational use and analytical exploration of housing market data.
+### Documentation and Metadata
+- Interactive API documentation (`/docs`, `/redoc`)  
+- Service metadata (`/info`) and health check (`/health`) endpoints  
+
+---
 
 ## 4. System Architecture
 
@@ -371,7 +326,7 @@ The design separates core entities into distinct tables and uses relationships t
 The system is centred around three primary entities:
 
 - **User**
-  - Stores authentication and authorisation data  
+  - Stores authentication and authorization data  
   - Attributes include username, email, hashed password, role, and audit fields  
   - Used to control access to protected endpoints  
 
@@ -608,7 +563,7 @@ The API implements a consistent and standardised error handling approach.
 #### Security Errors
 
 - Authentication failures return `401`
-- Authorisation failures return `403`
+- Authorization failures return `403`
 
 #### Consistency
 
@@ -619,7 +574,7 @@ The API implements a consistent and standardised error handling approach.
 
 Overall, the API design provides a clean, consistent, and predictable interface that aligns with RESTful best practices while supporting both standard CRUD operations and advanced analytical queries.
 
-## 9. Authentication and Authorisation
+## 9. Authentication and Authorization
 
 The API implements secure, stateless authentication using JSON Web Tokens (JWT) combined with role-based access control (RBAC). This ensures that only authorised users can access protected resources while maintaining scalability and simplicity.
 
@@ -731,7 +686,7 @@ The API enforces role-based access control to restrict operations based on user 
 
 ---
 
-Overall, the authentication and authorisation system ensures secure access control while maintaining a scalable and stateless API design aligned with RESTful principles.
+Overall, the authentication and authorization system ensures secure access control while maintaining a scalable and stateless API design aligned with RESTful principles.
 
 ## 10. Project Structure
 
@@ -1036,7 +991,7 @@ Successful response:
 Include the token in request headers:
 
 ```
-Authorisation: Bearer <access_token>
+Authorization: Bearer <access_token>
 ```
 
 This is required for all protected endpoints.
@@ -1257,6 +1212,13 @@ This section provides a structured overview of all available API endpoints. The 
   Provides distribution of EPC ratings  
 
 ---
+### 13.6 Service Endpoints
+
+- **GET /info**  
+  Returns metadata about the API (version, description, available features)
+
+- **GET /health**  
+  Returns API health status
 
 All endpoints return JSON responses and follow standard HTTP status codes. Protected endpoints require a valid JWT token and enforce role-based access control.
 
@@ -1274,7 +1236,7 @@ Testing is performed at the **API level** using HTTP requests rather than isolat
 - Routing and endpoint behaviour
 - Business logic execution
 - Database interactions
-- Authentication and authorisation
+- Authentication and authorization
 
 Each test verifies:
 - Correct HTTP status codes (e.g. 200, 201, 400, 401, 403, 404)
@@ -1352,7 +1314,7 @@ The test suite provides broad coverage across all major components of the API:
 
 #### Security
 - Authentication enforcement (401 errors)  
-- Authorisation enforcement (403 errors)  
+- Authorization enforcement (403 errors)  
 - Token validation and access control  
 
 #### Schemas
@@ -1407,8 +1369,7 @@ The chosen testing strategy is appropriate for this project because:
 
 ---
 
-Overall, the testing strategy ensures that the API is robust, secure, and reliable, meeting 
-
+Overall, the testing strategy ensures that the API is robust, secure, and reliable, meeting the requirements of the coursework and supporting production-ready behaviour.
 
 ## 15. Security Considerations
 
